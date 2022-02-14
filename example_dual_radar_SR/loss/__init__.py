@@ -50,12 +50,12 @@ class Loss(nn.modules.loss._Loss):
             self.loss_module.half()
         
     def forward(self, sr, hr):
-        # sr - super resolution (prediction) (CPLX)
-        # hr - high resolution (label) (CPLX)
+        # sr - super resolution (prediction) 
+        # hr - high resolution (label) 
         losses = []
         for i, l in enumerate(self.loss):
             if l['function'] is not None:
-                loss = l['function'](sr.r, hr.r) + l['function'](sr.i, hr.i)
+                loss = l['function'](sr, hr)
                 effective_loss = l['weight'] * loss
                 losses.append(effective_loss)
                 self.log[-1, i] += effective_loss.item()

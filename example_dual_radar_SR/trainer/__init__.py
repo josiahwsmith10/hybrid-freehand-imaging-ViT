@@ -50,23 +50,16 @@ class Trainer():
         timer_data, timer_model = timer(), timer()
             
         for batch, (lr, hr) in enumerate(self.loader_train):
-            # lr - low resolution (feature) (batch_size x 2 x N_HR)
-            # hr - high resolution (label) (batch_size x 2 x N_HR)
-            
-            # Convert (batch_size x 2 x N_HR) tensor to CPLX
-            lr = CPLX(lr[:, 0, :].reshape(self.args['batch_size'], 1, -1), 
-                      lr[:, 1, :].reshape(self.args['batch_size'], 1, -1))
-                      
-            hr = CPLX(hr[:, 0, :].reshape(self.args['batch_size'], 1, -1), 
-                      hr[:, 1, :].reshape(self.args['batch_size'], 1, -1))
-            
-            lr, hr = self.prepare(lr, hr) # accepts CPLX
+            # lr - low resolution (feature) (batch_size x 200 x 200)
+            # hr - high resolution (label) (batch_size x 200 x 200)
+                        
+            lr, hr = self.prepare(lr, hr)
             timer_data.hold()
             timer_model.tic()
             
             self.optimizer.zero_grad()
-            sr = self.model(lr) # accepts CPLX
-            loss = self.loss(sr, hr) # accepts CPLX
+            sr = self.model(lr)
+            loss = self.loss(sr, hr)
             loss.backward()
             self.optimizer.step()
             
@@ -98,20 +91,13 @@ class Trainer():
             running_loss = 0.0
                 
             for batch, (lr, hr) in enumerate(self.loader_train):
-                # lr - low resolution (feature) (batch_size x 2 x N_HR)
-                # hr - high resolution (label) (batch_size x 2 x N_HR)
+                # lr - low resolution (feature) (batch_size x 200 x 200)
+                # hr - high resolution (label) (batch_size x 200 x 200)
                 
-                # Convert (batch_size x 2 x N_HR) tensor to CPLX
-                lr = CPLX(lr[:, 0, :].reshape(self.args['batch_size'], 1, -1), 
-                        lr[:, 1, :].reshape(self.args['batch_size'], 1, -1))
-                        
-                hr = CPLX(hr[:, 0, :].reshape(self.args['batch_size'], 1, -1), 
-                        hr[:, 1, :].reshape(self.args['batch_size'], 1, -1))
+                lr, hr = self.prepare(lr, hr) 
                 
-                lr, hr = self.prepare(lr, hr) # accepts CPLX
-                
-                sr = self.model(lr) # accepts CPLX
-                loss = self.loss(sr, hr) # accepts CPLX
+                sr = self.model(lr) 
+                loss = self.loss(sr, hr) 
                 running_loss += loss
                 
             self.logs['val_log loss'] = running_loss.cpu().detach().numpy()
@@ -123,12 +109,10 @@ class Trainer():
         device = self.args['device']
         def _prepare(tensor):
             if self.args['precision'] == 'half': 
-                tensor.r = tensor.r.half()
-                tensor.i = tensor.i.half()
+                tensor = tensor.half()
             
-            r = tensor.r.to(device)
-            i = tensor.i.to(device)
-            return CPLX(r, i)
+            tensor = tensor.to(device)
+            return tensor
         
         return [_prepare(a) for a in args]
     
