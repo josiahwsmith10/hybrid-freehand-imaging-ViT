@@ -9,8 +9,15 @@ class Data:
     def __init__(self, dr, args):
         self.dr = dr
         self.args = args
+
+    def create_dataset_train(self, data_path):
+        # Load in the matlab data
+        # Get X and Y
+
+        # Put the matlab data into a TensorDataset
+        self.dataset_train = torch.utils.data.TensorDataset(X, Y)
         
-    def create_dataset_train(self, num_train, max_targets):
+    def create_dataset_train_old(self, num_train, max_targets):
         self.max_targets = max_targets
         
         self.num_train = num_train
