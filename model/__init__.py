@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 
 #THIS IS THE ADDED LIBRARY FROM THE GITHUB LUCIDRAINS MOBILEVIT
-from vit_pytorch.mobile_vit import MobileVit
 from einops import rearrange
 from einops.layers.torch import Reduce
 
@@ -76,8 +75,6 @@ class Attention(nn.Module):
 
 # input from args
 class Transformer(nn.Module):
-    
-
     def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0.):
         super().__init__()
         self.layers = nn.ModuleList([])
@@ -247,12 +244,13 @@ class HFFH_ViT(nn.Module):
         super().__init__()
         
         self.image_size = args['image_size']
+        self.patch_size = args['patch_size']
         self.dims = args['dims']
         self.channels = args['channels']
-        self.num_classes = args['num_classes']
         self.expansion = args['expansion']
         self.kernel_size = args['kernel_size']
         self.depths = args['depths']
+        self.in_channels = args['in_channels']
 
         assert len(self.dims) == 3, 'dims must be a tuple of 3'
         assert len(self.depths) == 3, 'depths must be a tuple of 3'
@@ -263,32 +261,39 @@ class HFFH_ViT(nn.Module):
 
         init_dim, *_, last_dim = self.channels
 
-        self.conv1 = conv_nxn_bn(3, init_dim, stride=2)
+        self.conv1 = conv_nxn_bn(self.in_channels, init_dim, stride=1)
 
         self.stem = nn.ModuleList([])
         self.stem.append(MV2Block(self.channels[0], self.channels[1], 1, self.expansion))
-        self.stem.append(MV2Block(self.channels[1], self.channels[2], 2, self.expansion))
+        self.stem.append(MV2Block(self.channels[1], self.channels[2], 1, self.expansion))
         self.stem.append(MV2Block(self.channels[2], self.channels[3], 1, self.expansion))
         self.stem.append(MV2Block(self.channels[2], self.channels[3], 1, self.expansion))
 
         self.trunk = nn.ModuleList([])
         self.trunk.append(nn.ModuleList([
-            MV2Block(self.channels[3], self.channels[4], 2, self.expansion),
+            MV2Block(self.channels[3], self.channels[4], 1, self.expansion),
             MobileViTBlock(self.dims[0], self.depths[0], self.channels[5],
                            self.kernel_size, self.patch_size, int(self.dims[0] * 2))
         ]))
 
         self.trunk.append(nn.ModuleList([
-            MV2Block(self.channels[5], self.channels[6], 2, self.expansion),
+            MV2Block(self.channels[5], self.channels[6], 1, self.expansion),
             MobileViTBlock(self.dims[1], self.depths[1], self.channels[7],
                            self.kernel_size, self.patch_size, int(self.dims[1] * 4))
         ]))
 
         self.trunk.append(nn.ModuleList([
-            MV2Block(self.channels[7], self.channels[8], 2, self.expansion),
+            MV2Block(self.channels[7], self.channels[8], 1, self.expansion),
             MobileViTBlock(self.dims[2], self.depths[2], self.channels[9],
                            self.kernel_size, self.patch_size, int(self.dims[2] * 4))
         ]))
+        
+        # CONDENSES CHANNELS TO LAST CHANNEL ARGUMENT VALUE
+        self.condense_channels = nn.Sequential(
+            conv_1x1_bn(self.channels[-2], last_dim),
+        )
+        
+        print("Created HFFH_ViT Model")
 
     def forward(self, x):
         x = self.conv1(x)
@@ -300,4 +305,4 @@ class HFFH_ViT(nn.Module):
             x = conv(x)
             x = attn(x)
 
-        return x
+        return self.condense_channels(x)
