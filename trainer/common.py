@@ -9,7 +9,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 import numpy as np
-import imageio
 
 import torch
 import torch.optim as optim

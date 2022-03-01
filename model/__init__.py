@@ -1,6 +1,7 @@
 # MODEL
 import torch
 import torch.nn as nn
+import numpy as np
 
 #THIS IS THE ADDED LIBRARY FROM THE GITHUB LUCIDRAINS MOBILEVIT
 from einops import rearrange
@@ -294,12 +295,64 @@ class HFFH_ViT(nn.Module):
         )
         
         print("Created HFFH_ViT Model")
+        
+    def num_params(self):
+        model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+        return sum([np.prod(p.size()) for p in model_parameters])
 
     def forward(self, x):
         x = self.conv1(x)
 
         for conv in self.stem:
             x = conv(x)
+
+        for conv, attn in self.trunk:
+            x = conv(x)
+            x = attn(x)
+
+        return self.condense_channels(x)
+
+class HFFH_ViT_S(nn.Module):
+    def __init__(self, args):
+        super().__init__()
+        
+        self.image_size = args['image_size']
+        self.patch_size = args['patch_size']
+        self.dims = args['dims']
+        self.channels = args['channels']
+        self.expansion = args['expansion']
+        self.kernel_size = args['kernel_size']
+        self.depths = args['depths']
+        self.in_channels = args['in_channels']
+
+        assert len(self.dims) == 3, 'dims must be a tuple of 3'
+        assert len(self.depths) == 3, 'depths must be a tuple of 3'
+
+        ih, iw = self.image_size
+        ph, pw = self.patch_size
+        assert ih % ph == 0 and iw % pw == 0
+
+        self.conv1 = conv_nxn_bn(self.in_channels, self.channels, stride=1)
+        self.trunk = nn.ModuleList([])
+        self.trunk.append(nn.ModuleList([
+            MV2Block(self.channels, self.channels, 1, self.expansion),
+            MobileViTBlock(self.dims[0], self.depths[0], self.channels,
+                           self.kernel_size, self.patch_size, int(self.dims[0] * 2))
+        ]))
+        
+        # CONDENSES CHANNELS TO LAST CHANNEL ARGUMENT VALUE
+        self.condense_channels = nn.Sequential(
+            conv_1x1_bn(self.channels, 1),
+        )
+        
+        print("Created HFFH_ViT_S Model")
+        
+    def num_params(self):
+        model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+        return sum([np.prod(p.size()) for p in model_parameters])
+
+    def forward(self, x):
+        x = self.conv1(x)
 
         for conv, attn in self.trunk:
             x = conv(x)

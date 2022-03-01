@@ -77,7 +77,7 @@ class Trainer():
                 
             timer_data.tic()
             
-        self.logs['log loss'] = running_loss.cpu().detach().numpy()
+        self.logs['log loss'] = 1000 / (batch + 1) * running_loss.cpu().detach().numpy()
         self.loss.end_log(len(self.loader_train))
         self.error_last = self.loss.log[-1, -1]
         self.optimizer.schedule()
@@ -100,7 +100,7 @@ class Trainer():
                 loss = self.loss(sr, hr) 
                 running_loss += loss
                 
-            self.logs['val_log loss'] = running_loss.cpu().detach().numpy()
+            self.logs['val_log loss'] = 1000 / (batch + 1) * running_loss.cpu().detach().numpy()
         
         self.liveloss.update(self.logs)
         self.liveloss.send()
