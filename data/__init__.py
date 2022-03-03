@@ -1,10 +1,10 @@
 import torch
-from scipy.constants import pi
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io as sio
 from matplotlib.colors import LinearSegmentedColormap
 from torchvision import transforms
+from scipy.io import savemat
 
 _parula_data = [[0.2081, 0.1663, 0.5292], 
                 [0.2116238095, 0.1897809524, 0.5776761905], 
@@ -92,7 +92,13 @@ class HFFH_ViT_Data:
             ind_start = N*ind
             ind_end = N*(ind+1)
             out[:, :, ind_start:ind_end] = np.abs(d[key])
-        return out
+            
+    
+        preprocess = transforms.Resize([256, 256])
+        out2 = np.zeros((256, 256, num_samples))
+        for ind in range(out.shape[2]):
+            out2[:, :, ind] = preprocess(torch.tensor(out[:, :, ind]).reshape((1, 200, 200))).numpy()[0]
+        return out2
     
     def load_train_data(self, filenames):
         data_all_lr = self.load_data(filenames=filenames, matlab_var_name='radarImagesFFH')
@@ -137,6 +143,46 @@ class HFFH_ViT_Data:
         self.test['rma'] = rma.transpose((2, 0, 1))
         self.test['bpa'] = bpa.transpose((2, 0, 1))
         self.test['hr'] = hr.transpose((2, 0, 1))
+    
+    def test_net(self, model, args, ind=None, save_name=None):
+        if ind is None:
+            ind = np.random.randint(len(self.dataset_val))
+        
+        lr = self.dataset_val.tensors[0][ind][0].numpy()
+        hr = self.dataset_val.tensors[1][ind][0].numpy()
+        sr = model(self.dataset_val.tensors[0][ind].reshape((1, 1, 256, 256)).to(args['device'])).cpu().detach().numpy()[0][0]
+        
+        self.plot_single(lr, title=f"LR #{ind}")
+        self.plot_single(hr, title=f"HR #{ind}")
+        self.plot_single(sr, title=f"SR #{ind}")
+        
+        if not save_name is None:
+            d = {}
+            d['lr'] = lr
+            d['hr'] = hr
+            d['sr'] = sr
+            savemat(f"./matlab_data/{save_name}.mat", d)
+            
+    def test_net_real(self, model, args, filename, scale=1, save_name=None):
+        def normalize(x):
+            return (x-x.min())/(x.max()-x.min())
+        
+        # Load matlab data
+        lr = np.abs(sio.loadmat(f"./matlab_data/{filename}.mat")['radarImagesFFH'])
+        
+        preprocess = transforms.Resize([256, 256])
+        lr = scale * normalize(preprocess(torch.tensor(lr).reshape((1, 200, 200)))[0])
+        sr = model(lr.reshape((1, 1, 256, 256)).to(args['device'])).cpu().detach().numpy()[0][0]
+        
+        self.plot_single(lr, title=f"LR")
+        self.plot_single(sr, title=f"SR")
+        
+        if not save_name is None:
+            d = {}
+            d['lr'] = lr.numpy()
+            d['sr'] = sr
+            savemat(f"./matlab_data/{save_name}.mat", d)
+        
         
     def test_net_quant(self, model, args):
         def normalize(x):
@@ -155,7 +201,7 @@ class HFFH_ViT_Data:
             return rmse
         
         def test_one(x, model, args):
-            return model(x.reshape((1, 1, 200, 200)).to(device=args['device'], dtype=torch.float))[0][0]
+            return model(x.reshape((1, 1, 256, 256)).to(device=args['device'], dtype=torch.float))[0][0]
         
         def preprocess(x, args, shape=(256, 256)):
             p = transforms.Resize(shape)
@@ -173,7 +219,7 @@ class HFFH_ViT_Data:
         rmses_rma = []
 
         for i in range(self.test['ffh'].shape[0]):            
-            xx_ffh = preprocess(self.test['ffh'][i], args, shape=(200, 200))
+            xx_ffh = preprocess(self.test['ffh'][i], args)
             xx_bpa = preprocess(self.test['bpa'][i], args)
             xx_rma = preprocess(self.test['rma'][i], args)
             yy_ffh = preprocess(self.test['hr'][i], args)
@@ -258,15 +304,3 @@ class HFFH_ViT_Data:
         
         self.plot_single(lr, title=f"LR #{ind}")
         self.plot_single(hr, title=f"HR #{ind}")
-
-    def test_net(self, model, args, ind=None):
-        if ind is None:
-            ind = np.random.randint(len(self.dataset_val))
-        
-        lr = self.dataset_val.tensors[0][ind][0]
-        hr = self.dataset_val.tensors[1][ind][0]
-        sr = model(self.dataset_val.tensors[0][ind].reshape((1, 1, 200, 200)).to(args['device'])).cpu().detach().numpy()[0][0]
-        
-        self.plot_single(lr, title=f"LR #{ind}")
-        self.plot_single(hr, title=f"HR #{ind}")
-        self.plot_single(sr, title=f"SR #{ind}")

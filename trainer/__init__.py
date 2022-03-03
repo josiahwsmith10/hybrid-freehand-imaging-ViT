@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from model.common import CPLX
 from trainer.common import timer, make_optimizer
 from livelossplot import PlotLosses
 
@@ -36,6 +35,8 @@ class Trainer():
         """
         Trains one epoch
         """
+        
+        torch.cuda.empty_cache()
         
         # Training phase
         self.loss.step()
